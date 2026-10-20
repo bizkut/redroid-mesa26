@@ -117,7 +117,7 @@ Optional repository variables:
 
 The build workflow derives a source-cache directory from the manifests and patch content. Changed source recipes use a new checkout instead of deleting an older one. Successful runs retain the complete Docker image and rootfs archive on the dedicated runner and upload only the build log and provenance JSON to GitHub.
 
-Initial owner-only publication [run `39428537341`](https://github.com/bizkut/redroid-mesa26/actions/runs/39428537341) validated the exact local image, added OCI labels, and pushed the three tags with the repository-scoped `GITHUB_TOKEN`. The current `Verify qualified ReDroid image` workflow runs on a hosted runner for every `main` push and owner dispatch. It requires non-null recorded OCI index, Linux/amd64, and attestation digests and verifies all three tags without rewriting them.
+Initial owner-only publication [run `39428537341`](https://github.com/bizkut/redroid-mesa26/actions/runs/39428537341) validated the exact local image, added OCI labels, and pushed the three tags with the repository-scoped `GITHUB_TOKEN`. The current `Verify qualified ReDroid image` workflow runs on a hosted runner for every `main` push and owner dispatch. It requires non-null recorded OCI index, Linux/amd64, and attestation digests and verifies all three tags without rewriting them; [run `39430130580`](https://github.com/bizkut/redroid-mesa26/actions/runs/39430130580) passed.
 
 ## Run the image
 
