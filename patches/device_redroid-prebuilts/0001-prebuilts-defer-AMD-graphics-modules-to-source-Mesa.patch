@@ -1,0 +1,81 @@
+From eac164f07fb29aada572b9d6dd1fa7a466cd1d39 Mon Sep 17 00:00:00 2001
+From: Hasanuddin Abu Bakar <177014+bizkut@users.noreply.github.com>
+Date: Tue, 20 Oct 2026 12:07:50 +0800
+Subject: [PATCH] prebuilts: defer AMD graphics modules to source Mesa
+
+---
+ Android.mk   | 9 +++++++++
+ prebuilts.mk | 7 ++++++-
+ 2 files changed, 15 insertions(+), 1 deletion(-)
+
+diff --git a/Android.mk b/Android.mk
+index 667eea7..1837a9b 100644
+--- a/Android.mk
++++ b/Android.mk
+@@ -73,6 +73,7 @@ $(foreach lib,$(libs),\
+     $(eval $(call define-redroid-prebuilt-lib,$(lib)_p,$(lib).so,$(lib).so)))
+ 
+ 
++ifneq ($(REDROID_USE_SOURCE_MESA),true)
+ # DRI
+ dri_libs := libgallium_dri
+ drv_libs := libgallium_drv_video
+@@ -90,6 +91,7 @@ dri_links := $(shell cd $(LOCAL_PATH)/prebuilts/$(TARGET_ARCH)/lib/dri && find *
+ drv_links := $(shell cd $(LOCAL_PATH)/prebuilts/$(TARGET_ARCH)/lib/dri && find * -name '*_drv_video.so' -type l)
+ $(eval $(call define-redroid-prebuilt-lib,libgallium_dri,,dri/libgallium_dri.so,dri,$(dri_links)))
+ $(eval $(call define-redroid-prebuilt-lib,libgallium_drv_video,,dri/libgallium_drv_video.so,dri,$(drv_links)))
++endif
+ 
+ 
+ ## amdgpu.ids
+@@ -121,15 +123,20 @@ $(foreach lib,$(llvm_libs),\
+     $(eval $(call define-redroid-prebuilt-lib,$(lib),,$(lib).so)))
+ 
+ 
++ifneq ($(REDROID_USE_SOURCE_MESA),true)
+ # GLES
+ libs := libEGL_mesa libGLESv1_CM_mesa libGLESv2_mesa
+ $(foreach lib,$(libs),\
+     $(eval $(call define-redroid-prebuilt-lib,$(lib),,egl/$(lib).so,egl,,\
+ 		$(dri_libs) $(glapi_libs) $(drm_libs))))
++endif
+ 
+ 
+ # Vulkan
+ vulkan_libs := $(shell cd $(LOCAL_PATH)/prebuilts/$(TARGET_ARCH)/lib/hw && find * -name 'libvulkan_*.so' -type f)
++ifeq ($(REDROID_USE_SOURCE_MESA),true)
++vulkan_libs := $(filter-out libvulkan_radeon.so,$(vulkan_libs))
++endif
+ $(foreach lib,$(vulkan_libs),\
+ 	$(eval $(call define-redroid-prebuilt-lib,$(lib:libvulkan_%.so=vulkan.%),,hw/$(lib),hw,,$(ndk_libs_cxx:%=%_p))))
+ 
+@@ -138,8 +145,10 @@ $(foreach lib,$(vulkan_libs),\
+ $(eval $(call define-redroid-prebuilt-lib,gralloc.cros,,hw/gralloc.cros.so,hw))
+ 
+ 
++ifneq ($(REDROID_USE_SOURCE_MESA),true)
+ # gbm gralloc
+ $(eval $(call define-redroid-prebuilt-lib,gralloc.gbm,,hw/gralloc.gbm.so,hw,,$(gbm_libs)))
++endif
+ 
+ 
+ # redroid audio
+diff --git a/prebuilts.mk b/prebuilts.mk
+index a137cdc..6946fab 100644
+--- a/prebuilts.mk
++++ b/prebuilts.mk
+@@ -1,5 +1,10 @@
++ifeq ($(REDROID_USE_SOURCE_MESA),true)
++PRODUCT_PACKAGES += amdgpu.ids
++else
++PRODUCT_PACKAGES += amdgpu.ids.redroid
++endif
++
+ PRODUCT_PACKAGES += \
+-    amdgpu.ids.redroid \
+     libEGL_mesa \
+     libGLESv1_CM_mesa \
+     libGLESv2_mesa \
+-- 
+2.53.0
+

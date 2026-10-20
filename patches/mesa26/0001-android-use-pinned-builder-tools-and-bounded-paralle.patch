@@ -1,0 +1,34 @@
+From 71d26a1c6cbc5ad69b4275267aa9b5de970facf9 Mon Sep 17 00:00:00 2001
+From: Hasanuddin Abu Bakar <177014+bizkut@users.noreply.github.com>
+Date: Tue, 20 Oct 2026 12:39:45 +0800
+Subject: [PATCH] android: use pinned builder tools and bounded parallelism
+
+---
+ android/mesa3d_cross.mk | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/android/mesa3d_cross.mk b/android/mesa3d_cross.mk
+index 8e709a4..5477485 100644
+--- a/android/mesa3d_cross.mk
++++ b/android/mesa3d_cross.mk
+@@ -83,7 +83,7 @@ MESA3D_GLES_BINS := \
+     $($(M_TARGET_PREFIX)MESA3D_LIBGLESV2_BIN) \
+ 
+ MESON_GEN_NINJA := \
+-	cd $(MESON_OUT_DIR) && PATH=/usr/bin:/usr/local/bin:$$PATH meson ./build     \
++	cd $(MESON_OUT_DIR) && PATH=/opt/mesa-python/bin:/usr/bin:/usr/local/bin:$$PATH /opt/mesa-python/bin/meson ./build \
+ 	--cross-file $(call relative-to-absolute,$(MESON_GEN_DIR))/aosp_cross        \
+ 	--buildtype=release                                                          \
+ 	-Dplatforms=android                                                          \
+@@ -100,7 +100,7 @@ MESON_GEN_NINJA := \
+ 	-Dandroid-libbacktrace=disabled                                              \
+ 	$(BOARD_MESA3D_MESON_ARGS)                                                   \
+ 
+-MESON_BUILD := PATH=/usr/bin:/bin:/sbin:$$PATH ninja -C $(MESON_OUT_DIR)/build
++MESON_BUILD := PATH=/opt/mesa-python/bin:/usr/bin:/bin:/sbin:$$PATH /usr/bin/ninja -j$(or $(BOARD_MESA3D_BUILD_JOBS),2) -C $(MESON_OUT_DIR)/build
+ 
+ $(MESON_GEN_FILES_TARGET): MESON_CPU_FAMILY := $(subst arm64,aarch64,$(TARGET_$(M_TARGET_PREFIX)ARCH))
+ 
+-- 
+2.53.0
+

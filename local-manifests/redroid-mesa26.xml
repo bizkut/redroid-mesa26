@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<manifest>
+    <remote name="mesa-mirror" fetch="https://github.com/chaotic-cx/" />
+    <remote name="mesa-gitlab" fetch="https://gitlab.freedesktop.org/mesa/" />
+
+    <remove-project name="platform/external/libdrm" />
+    <project path="external/libdrm" name="drm" remote="mesa-gitlab"
+             revision="cb4669afe87470752643f46c81bddb45b0db48e4" clone-depth="1" />
+    <project path="external/mesa26" name="mesa-mirror" remote="mesa-mirror"
+             revision="ddaf85e353442d9d7f192fdcf1823e652e3f2ee3" clone-depth="1" />
+    <project path="external/gbm_gralloc" name="gbm_gralloc" remote="redroid"
+             revision="a8874a18ad7884ea713f45047efad080fe973712" clone-depth="1" />
+
+</manifest>

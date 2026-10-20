@@ -1,0 +1,26 @@
+From f1a2eb6782a52f535ca0f75d9cc54032dc3b5da4 Mon Sep 17 00:00:00 2001
+From: Hasanuddin Abu Bakar <177014+bizkut@users.noreply.github.com>
+Date: Tue, 20 Oct 2026 19:47:21 +0800
+Subject: [PATCH] libvintf: tolerate unavailable host kernel config
+
+Change-Id: I5b8a97b11dc74cb24432ed2e990f600841b4798e
+---
+ KernelConfigs.cpp | 2 ++
+ 1 file changed, 2 insertions(+)
+
+diff --git a/KernelConfigs.cpp b/KernelConfigs.cpp
+index 3de65ea..c17d0be 100644
+--- a/KernelConfigs.cpp
++++ b/KernelConfigs.cpp
+@@ -34,6 +34,8 @@ status_t LoadKernelConfigs(std::map<std::string, std::string>* configs) {
+     gzFile f = gzopen("/proc/config.gz", "rb");
+     if (f == NULL) {
+         LOG(ERROR) << "Could not open /proc/config.gz: " << errno;
++        // Containers use the host kernel and may not expose CONFIG_IKCONFIG_PROC.
++        errno = 0;
+         return -errno;
+     }
+ 
+-- 
+2.53.0
+

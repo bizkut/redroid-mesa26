@@ -1,0 +1,59 @@
+From 5269f9b317e20c1f15779bf6b926f453bf541e36 Mon Sep 17 00:00:00 2001
+From: Hasanuddin Abu Bakar <177014+bizkut@users.noreply.github.com>
+Date: Tue, 20 Oct 2026 12:07:50 +0800
+Subject: [PATCH] redroid: build Mesa 26 graphics stack from source
+
+---
+ redroid.mk                         |  7 +++++++
+ redroid_x86_64_only.mk             |  1 +
+ redroid_x86_64_only/BoardConfig.mk | 10 ++++++++++
+ 3 files changed, 18 insertions(+)
+
+diff --git a/redroid.mk b/redroid.mk
+index 7e6c7d2..0998621 100644
+--- a/redroid.mk
++++ b/redroid.mk
+@@ -132,3 +132,10 @@ $(call inherit-product-if-exists, product.mk)
+ $(call inherit-product, vendor/redroid/vendor.mk)
+ 
+ $(call inherit-product, device/redroid-prebuilts/prebuilts.mk)
++
++ifeq ($(REDROID_USE_SOURCE_MESA),true)
++PRODUCT_PACKAGES += \
++    libgallium_dri \
++    libgbm_mesa \
++    dri_gbm
++endif
+diff --git a/redroid_x86_64_only.mk b/redroid_x86_64_only.mk
+index cb7c370..5baa806 100644
+--- a/redroid_x86_64_only.mk
++++ b/redroid_x86_64_only.mk
+@@ -17,6 +17,7 @@ $(call inherit-product, $(SRC_TARGET_DIR)/product/aosp_base.mk)
+ 
+ $(call inherit-product, $(LOCAL_PATH)/redroid_64only.mk)
+ REDROID_DISABLE_OMX := true
++REDROID_USE_SOURCE_MESA := true
+ $(call inherit-product, $(LOCAL_PATH)/redroid.mk)
+ $(call inherit-product, $(LOCAL_PATH)/redroid_x86_64_only/device.mk)
+ 
+diff --git a/redroid_x86_64_only/BoardConfig.mk b/redroid_x86_64_only/BoardConfig.mk
+index fa6252d..a405f83 100755
+--- a/redroid_x86_64_only/BoardConfig.mk
++++ b/redroid_x86_64_only/BoardConfig.mk
+@@ -17,3 +17,13 @@ BOARD_SYSTEMIMAGE_PARTITION_RESERVED_SIZE := 16777216
+ 
+ DEVICE_MANIFEST_FILE += device/redroid/manifest.xml
+ 
++# Build a coherent Android/Bionic Mesa stack for the host's AMD GFX1013 GPU.
++BOARD_MESA3D_USES_MESON_BUILD := true
++BOARD_MESA3D_GALLIUM_DRIVERS := radeonsi
++BOARD_MESA3D_VULKAN_DRIVERS := amd
++BOARD_MESA3D_BUILD_LIBGBM := true
++BOARD_MESA3D_MESON_ARGS := \
++    -Damd-use-llvm=false \
++    -Dgallium-va=disabled \
++    -Dvideo-codecs= \
++    -Dbuild-tests=false
+-- 
+2.53.0
+

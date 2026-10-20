@@ -1,0 +1,23 @@
+ReDroid Android 14 with Mesa 26
+Copyright 2026 Hasanuddin Abu Bakar
+
+This product includes build integration and changes derived from third-party
+open-source projects. The patch files in this repository retain the licensing
+terms and attribution requirements of the projects to which they apply:
+
+- Android Open Source Project: https://source.android.com/
+- ReDroid and redroid-patches: https://github.com/remote-android
+- Mesa: https://gitlab.freedesktop.org/mesa/mesa
+- libdrm: https://gitlab.freedesktop.org/mesa/drm
+- gbm_gralloc: https://github.com/remote-android/gbm_gralloc
+
+The repository does not redistribute the pinned native-translation payload.
+Packaging obtains it from the exact published ReDroid image identified in
+native-bridge-source.json and verifies every selected path with
+native-bridge.sha256. Building or distributing a derived Android image may
+carry additional obligations under the licenses and notices of all included
+AOSP, ReDroid, Mesa, kernel-interface, and binary components.
+
+ReDroid, Android, Mesa, Vulkan, AMD, and other names are trademarks or names
+of their respective owners. Their mention identifies compatibility targets
+and upstream provenance; it does not imply endorsement.

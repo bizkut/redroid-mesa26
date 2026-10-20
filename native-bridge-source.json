@@ -1,0 +1,26 @@
+{
+  "source_image": "redroid/redroid@sha256:0a611199ba2e0b5d60af39b3327a517f6407231f4352114ed3bd3cbfe2be69aa",
+  "android_release": "14.0.0 64-only",
+  "purpose": "Pinned ARM64 libndk_translation payload for the source-built x86_64-only ReDroid image",
+  "manifest": "native-bridge.sha256",
+  "manifest_sha256": "56887ffee9dd3066f830cce4a25855cb759ef217bcefd8d1e0a3d6e3354aeb7b",
+  "verified_paths": 92,
+  "payload_bytes_following_symlinks": 25825676,
+  "directory_roots": [
+    "system/bin/arm64",
+    "system/etc/binfmt_misc",
+    "system/lib64/arm64"
+  ],
+  "individual_files": [
+    "system/bin/ndk_translation_program_runner_binfmt_misc_arm64",
+    "system/etc/init/ndk_translation.rc",
+    "system/etc/cpuinfo.arm64.txt",
+    "system/etc/ld.config.arm64.txt",
+    "system/lib64/libnativebridge_lazy.so",
+    "system/lib64/libnb.so",
+    "system/lib64/libndk_translation.so",
+    "system/lib64/libndk_translation_proxy_*.so"
+  ],
+  "libnb_symlink_target": "libndk_translation.so",
+  "boundary": "Payload bytes come only from the exact published Android 14 ReDroid image. The host's glibc libraries are never copied."
+}

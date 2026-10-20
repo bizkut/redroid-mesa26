@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<manifest>
+    <!-- ReDroid uses the host kernel and container runtime; these device/VM prebuilts are unrelated. -->
+    <remove-project name="device/google/cuttlefish_vmm" />
+    <remove-project name="device/amlogic/yukawa-kernel" />
+    <remove-project name="device/google/akita-kernel" />
+    <remove-project name="device/google/bluejay-kernel" />
+    <remove-project name="device/google/coral-kernel" />
+    <remove-project name="device/google/felix-kernel" />
+    <remove-project name="device/google/lynx-kernel" />
+    <remove-project name="device/google/pantah-kernel" />
+    <remove-project name="device/google/raviole-kernel" />
+    <remove-project name="device/google/redbull-kernel" />
+    <remove-project name="device/google/shusky-kernel" />
+    <remove-project name="device/google/sunfish-kernel" />
+    <remove-project name="device/google/tangorpro-kernel" />
+    <remove-project name="device/linaro/dragonboard-kernel" />
+    <remove-project name="device/linaro/hikey-kernel" />
+    <remove-project name="device/linaro/poplar-kernel" />
+</manifest>

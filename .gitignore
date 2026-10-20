@@ -1,0 +1,29 @@
+# Android and repository-tool outputs
+.repo/
+out/
+build/
+
+# Runtime state and large image products
+data/
+*.img
+*.qcow2
+*.raw
+*.tar
+*.tar.*
+
+# Application and device artifacts
+*.apk
+*.apks
+*.aab
+*.xapk
+*.pcap
+*.pcapng
+
+# Logs, local configuration, and credentials
+*.log
+.env
+.env.*
+*.pem
+*.key
+*.keystore
+*.jks

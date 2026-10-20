@@ -1,0 +1,215 @@
+name: Validate and build ReDroid
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+    inputs:
+      jobs:
+        description: Parallel Android build jobs
+        required: true
+        default: "8"
+        type: choice
+        options:
+          - "2"
+          - "4"
+          - "8"
+          - "12"
+          - "16"
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    name: Validate recipe
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Check out recipe
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Install validation tools
+        run: sudo apt-get update && sudo apt-get install -y libegl1-mesa-dev libgles2-mesa-dev libvulkan-dev libxml2-utils shellcheck
+
+      - name: Validate shell and manifests
+        run: |
+          set -euo pipefail
+          bash -n build-mesa26.sh
+          shellcheck build-mesa26.sh
+          find local-manifests -type f -name '*.xml' -print0 |
+            sort -z | xargs -0 -n1 xmllint --noout
+
+      - name: Validate native bridge provenance
+        run: |
+          python3 - <<'PY'
+          import hashlib
+          import json
+          from pathlib import Path, PurePosixPath
+
+          manifest = Path("native-bridge.sha256")
+          metadata = json.loads(Path("native-bridge-source.json").read_text())
+          digest = hashlib.sha256(manifest.read_bytes()).hexdigest()
+          if digest != metadata["manifest_sha256"]:
+              raise SystemExit("native bridge manifest digest does not match metadata")
+
+          rows = []
+          for number, line in enumerate(manifest.read_text().splitlines(), 1):
+              fields = line.split(maxsplit=1)
+              if len(fields) != 2 or len(fields[0]) != 64:
+                  raise SystemExit(f"invalid native bridge manifest row {number}")
+              path = fields[1].lstrip("*")
+              parts = PurePosixPath(path).parts
+              if not parts or parts[0] != "system" or ".." in parts:
+                  raise SystemExit(f"unsafe native bridge path on row {number}")
+              rows.append(path)
+          if len(rows) != metadata["verified_paths"] or len(rows) != len(set(rows)):
+              raise SystemExit("native bridge manifest count or uniqueness mismatch")
+          PY
+
+      - name: Validate runtime configuration and GPU probe
+        run: |
+          set -euo pipefail
+          REDROID_MESA26_DATA="$RUNNER_TEMP/redroid-data" docker compose config --quiet
+          cc -std=c11 -Wall -Wextra -Werror -fsyntax-only gpu-probe.c
+
+  build:
+    name: Build Android 14 image
+    needs: validate
+    if: >-
+      github.event_name == 'workflow_dispatch' &&
+      github.ref == 'refs/heads/main' &&
+      github.actor == github.repository_owner
+    runs-on: [self-hosted, Linux, X64, redroid-builder]
+    timeout-minutes: 720
+    concurrency:
+      group: redroid-mesa26-build
+      cancel-in-progress: false
+    env:
+      JOBS: ${{ inputs.jobs }}
+      REPO_SYNC_JOBS: ${{ vars.REDROID_REPO_SYNC_JOBS }}
+      DOCKER_CPUS: ${{ vars.REDROID_DOCKER_CPUS }}
+      DOCKER_MEM: ${{ vars.REDROID_DOCKER_MEM }}
+      DOCKER_SWAP: ${{ vars.REDROID_DOCKER_SWAP }}
+      REDROID_SOURCE_ROOT: ${{ vars.REDROID_SOURCE_ROOT }}
+      REDROID_PATCHES_DIR: ${{ vars.REDROID_PATCHES_DIR }}
+      REDROID_CCACHE_DIR: ${{ vars.REDROID_CCACHE_DIR }}
+    steps:
+      - name: Check out trusted default branch
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Verify dedicated runner prerequisites
+        run: |
+          set -euo pipefail
+          for command in ccache docker git repo sha256sum sudo; do
+            command -v "$command" >/dev/null || { echo "Missing required command: $command" >&2; exit 1; }
+          done
+          sudo -n true
+          docker info >/dev/null
+          df -h "$HOME"
+          free -h
+
+      - name: Resolve persistent build paths
+        run: |
+          set -euo pipefail
+          recipe_hash=$(
+            {
+              find local-manifests patches -type f \( -name '*.xml' -o -name '*.patch' \) -print0 |
+                sort -z | xargs -0 sha256sum
+              printf '%s\n' a5c70c0dd89c12b5027c902ab4182f31d38f3bb7
+            } | sha256sum | cut -d' ' -f1
+          )
+          source_root=${REDROID_SOURCE_ROOT:-$HOME/.cache/redroid-mesa26/sources}
+          patches_dir=${REDROID_PATCHES_DIR:-$HOME/.cache/redroid-mesa26/redroid-patches}
+          ccache_dir=${REDROID_CCACHE_DIR:-$HOME/.cache/redroid-mesa26/ccache}
+          mkdir -p "$source_root" "$(dirname "$patches_dir")" "$ccache_dir"
+          {
+            printf 'SOURCE_DIR=%s\n' "$source_root/${recipe_hash:0:16}"
+            printf 'UPSTREAM_PATCHES_DIR=%s\n' "$patches_dir"
+            printf 'CCACHE_DIR=%s\n' "$ccache_dir"
+            printf 'IMAGE_DIR=%s\n' "$GITHUB_WORKSPACE/build/redroid/mesa26"
+          } >> "$GITHUB_ENV"
+
+      - name: Prepare pinned upstream patch checkout
+        env:
+          PATCH_COMMIT: a5c70c0dd89c12b5027c902ab4182f31d38f3bb7
+        run: |
+          set -euo pipefail
+          if [[ ! -e $UPSTREAM_PATCHES_DIR ]]; then
+            git clone https://github.com/remote-android/redroid-patches.git "$UPSTREAM_PATCHES_DIR"
+          fi
+          [[ -d $UPSTREAM_PATCHES_DIR/.git ]] || { echo "Patch path is not a Git checkout" >&2; exit 1; }
+          [[ -z $(git -C "$UPSTREAM_PATCHES_DIR" status --porcelain) ]] || {
+            echo "Patch checkout has local changes; refusing to discard them" >&2
+            exit 1
+          }
+          remote=$(git -C "$UPSTREAM_PATCHES_DIR" remote get-url origin)
+          [[ $remote == https://github.com/remote-android/redroid-patches.git ||
+             $remote == https://github.com/remote-android/redroid-patches ]] || {
+            echo "Unexpected redroid-patches origin: $remote" >&2
+            exit 1
+          }
+          git -C "$UPSTREAM_PATCHES_DIR" fetch --prune origin
+          git -C "$UPSTREAM_PATCHES_DIR" checkout --detach "$PATCH_COMMIT"
+          [[ $(git -C "$UPSTREAM_PATCHES_DIR" rev-parse HEAD) == "$PATCH_COMMIT" ]]
+
+      - name: Prepare Android source
+        run: ./build-mesa26.sh prepare
+
+      - name: Build Android source
+        run: ./build-mesa26.sh build
+
+      - name: Package ReDroid image
+        run: ./build-mesa26.sh package
+
+      - name: Record build provenance
+        run: |
+          set -euo pipefail
+          export IMAGE_ID ROOTFS_SHA256
+          IMAGE_ID=$(docker image inspect --format '{{.Id}}' redroid-rootfs:android14-mesa26)
+          ROOTFS_SHA256=$(sha256sum "$IMAGE_DIR/rootfs.tar" | cut -d' ' -f1)
+          python3 - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          output = {
+              "repository": os.environ["GITHUB_REPOSITORY"],
+              "commit": os.environ["GITHUB_SHA"],
+              "run_id": int(os.environ["GITHUB_RUN_ID"]),
+              "source_dir": os.environ["SOURCE_DIR"],
+              "image": "redroid-rootfs:android14-mesa26",
+              "image_id": os.environ["IMAGE_ID"],
+              "rootfs_sha256": os.environ["ROOTFS_SHA256"],
+          }
+          path = Path(os.environ["IMAGE_DIR"]) / "provenance.json"
+          path.write_text(json.dumps(output, indent=2, sort_keys=True) + "\n")
+          PY
+
+      - name: Upload logs and provenance
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: redroid-mesa26-${{ github.run_id }}
+          if-no-files-found: warn
+          retention-days: 14
+          path: |
+            build/redroid/mesa26/build.log
+            build/redroid/mesa26/provenance.json
+
+      - name: Report local image
+        run: |
+          {
+            echo '## ReDroid Mesa 26 build'
+            echo
+            echo 'The complete image remains on the dedicated self-hosted runner:'
+            echo '```text'
+            docker image inspect --format 'image={{.RepoTags}} id={{.Id}} size={{.Size}}' redroid-rootfs:android14-mesa26
+            sha256sum "$IMAGE_DIR/rootfs.tar"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"

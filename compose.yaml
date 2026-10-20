@@ -1,0 +1,33 @@
+name: redroid-mesa26
+services:
+  android:
+    image: ${REDROID_MESA26_IMAGE:-redroid-rootfs:android14-mesa26}
+    pull_policy: never
+    container_name: redroid-mesa26
+    privileged: true
+    restart: "no"
+    mem_limit: 8g
+    cpus: 8.0
+    shm_size: 2g
+    ports:
+      - "127.0.0.1:5558:5555"
+    devices:
+      - "/dev/dri/card0:/dev/dri/card0"
+      - "/dev/dri/renderD128:/dev/dri/renderD128"
+    volumes:
+      - "${REDROID_MESA26_DATA:-${HOME}/.local/share/redroid-mesa26/data}:/data"
+      - "/dev/null:/dev/kmsg"
+      - "/sys/kernel/debug:/sys/kernel/debug:ro"
+    command:
+      - androidboot.redroid_width=1920
+      - androidboot.redroid_height=1080
+      - androidboot.redroid_dpi=320
+      - androidboot.redroid_fps=30
+      - androidboot.redroid_gpu_mode=host
+      - androidboot.redroid_gpu_node=/dev/dri/renderD128
+      - androidboot.use_memfd=true
+      - service.adb.tcp.port=5555
+      - ro.secure=0
+      - ro.debuggable=1
+      - ro.adb.secure=0
+      - ro.setupwizard.mode=DISABLED
