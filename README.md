@@ -33,7 +33,7 @@ Available tags:
 
 The public OCI index digest is `sha256:e83683ca2de04553e7de57b757e6aebed2348fd7c8edcafab65c62f12f896ba7`; its Linux/amd64 image manifest is `sha256:d33e0b8bd00749fa4b134e748c7172cf9ac1e4caff3d131746f55ab1f76cec26`.
 
-The registry image adds OCI provenance labels to the qualified filesystem without changing its files. `prebuilt-image.json` binds the source image ID, rootfs SHA-256, platform, publication tags, and qualification boundary. The image contains no emulator `/data` state, APKs, game data, or account data.
+The registry image adds OCI provenance labels to the qualified filesystem without changing its files. `prebuilt-image.json` binds the source image ID, rootfs SHA-256, platform, publication tags, and qualification boundary. The rootfs has an empty `/data` mount point and no Skylore paths, user-installed/game APKs, game data, or account data; the 90 Android operating-system APKs remain part of the system image.
 
 ## Pinned sources
 
@@ -117,11 +117,13 @@ Optional repository variables:
 
 The build workflow derives a source-cache directory from the manifests and patch content. Changed source recipes use a new checkout instead of deleting an older one. Successful runs retain the complete Docker image and rootfs archive on the dedicated runner and upload only the build log and provenance JSON to GitHub.
 
-The separate owner-only `Publish qualified ReDroid image` workflow runs on a trusted self-hosted runner labeled `redroid-publisher`. It refuses any local image whose ID or platform differs from `prebuilt-image.json`, adds OCI provenance labels, and pushes the channel, release, and immutable tags with the repository-scoped `GITHUB_TOKEN`.
+Initial owner-only publication [run `39428537341`](https://github.com/bizkut/redroid-mesa26/actions/runs/39428537341) validated the exact local image, added OCI labels, and pushed the three tags with the repository-scoped `GITHUB_TOKEN`. The current `Verify qualified ReDroid image` workflow runs on a hosted runner for every `main` push and owner dispatch. It requires non-null recorded OCI index, Linux/amd64, and attestation digests and verifies all three tags without rewriting them.
 
 ## Run the image
 
 The supplied Compose file pulls the GHCR channel when missing, remains intentionally privileged, and exposes ADB on loopback only:
+
+This is a development image: the container is privileged, Android is debuggable, ADB authentication is disabled inside the isolated container, and the host publishes ADB on loopback only. Never bind its ADB port to an untrusted interface.
 
 ```sh
 docker compose pull

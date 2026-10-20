@@ -1,23 +1,23 @@
-name: Publish qualified ReDroid image
+name: Verify qualified ReDroid image
 
 on:
+  push:
+    branches: [main]
   workflow_dispatch:
 
 permissions:
   contents: read
-  packages: write
 
 jobs:
-  publish:
-    name: Publish qualified image to GHCR
+  verify:
+    name: Verify published image on GHCR
     if: >-
-      github.ref == 'refs/heads/main' &&
-      github.actor == github.repository_owner
-    runs-on: [self-hosted, Linux, X64, redroid-publisher]
-    timeout-minutes: 120
-    concurrency:
-      group: redroid-mesa26-publish
-      cancel-in-progress: false
+      github.event_name == 'push' ||
+      (github.event_name == 'workflow_dispatch' &&
+       github.ref == 'refs/heads/main' &&
+       github.actor == github.repository_owner)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
     steps:
       - name: Check out trusted publication manifest
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -43,6 +43,9 @@ jobs:
               "release_tag": r"v[0-9]+\.[0-9]+\.[0-9]+",
               "channel_tag": r"[a-z0-9._-]+",
               "immutable_tag": r"image-[0-9a-f]{12}",
+              "registry_digest": r"sha256:[0-9a-f]{64}",
+              "registry_platform_digest": r"sha256:[0-9a-f]{64}",
+              "registry_attestation_digest": r"sha256:[0-9a-f]{64}",
           }
           if data.get("schema") != 1 or data.get("platform") != "linux/amd64":
               raise SystemExit("unsupported prebuilt image manifest")
@@ -57,84 +60,78 @@ jobs:
                   print(f"{key}={data[key]}", file=output)
           PY
 
-      - name: Verify exact qualified local image
+      - name: Verify every public tag and manifest digest
         env:
-          SOURCE_IMAGE: ${{ steps.metadata.outputs.qualified_source_image }}
-          EXPECTED_ID: ${{ steps.metadata.outputs.qualified_source_image_id }}
-        run: |
-          set -euo pipefail
-          observed=$(docker image inspect --format '{{.Id}}' "$SOURCE_IMAGE")
-          [[ $observed == "$EXPECTED_ID" ]] || {
-            echo "Expected $EXPECTED_ID but found $observed" >&2
-            exit 1
-          }
-          [[ $(docker image inspect --format '{{.Os}}/{{.Architecture}}' "$SOURCE_IMAGE") == linux/amd64 ]]
-
-      - name: Create labeled registry image
-        env:
-          SOURCE_IMAGE: ${{ steps.metadata.outputs.qualified_source_image }}
-          TARGET_IMAGE: ${{ steps.metadata.outputs.registry }}
-          CHANNEL_TAG: ${{ steps.metadata.outputs.channel_tag }}
-          ROOTFS_SHA256: ${{ steps.metadata.outputs.qualified_rootfs_sha256 }}
-        run: |
-          set -euo pipefail
-          context="$RUNNER_TEMP/redroid-publish-context"
-          rm -rf "$context"
-          mkdir -p "$context"
-          printf '%s\n' 'ARG SOURCE_IMAGE' "FROM \${SOURCE_IMAGE}" > "$context/Dockerfile"
-          docker build --pull=false \
-            --build-arg SOURCE_IMAGE="$SOURCE_IMAGE" \
-            --label org.opencontainers.image.title='ReDroid Android 14 with Mesa 26' \
-            --label org.opencontainers.image.description='Hardware-accelerated Android 14 ReDroid image with Mesa RadeonSI and RADV' \
-            --label org.opencontainers.image.source="https://github.com/$GITHUB_REPOSITORY" \
-            --label org.opencontainers.image.revision="$GITHUB_SHA" \
-            --label org.opencontainers.image.version="${{ steps.metadata.outputs.release_tag }}" \
-            --label io.github.bizkut.redroid.qualified-source-id="${{ steps.metadata.outputs.qualified_source_image_id }}" \
-            --label io.github.bizkut.redroid.rootfs-sha256="$ROOTFS_SHA256" \
-            --tag "$TARGET_IMAGE:$CHANNEL_TAG" \
-            "$context"
-
-      - name: Authenticate to GitHub Container Registry
-        env:
-          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: printf '%s' "$GHCR_TOKEN" | docker login ghcr.io --username "$GITHUB_ACTOR" --password-stdin
-
-      - name: Push versioned and immutable tags
-        id: push
-        env:
-          TARGET_IMAGE: ${{ steps.metadata.outputs.registry }}
+          REGISTRY: ${{ steps.metadata.outputs.registry }}
           CHANNEL_TAG: ${{ steps.metadata.outputs.channel_tag }}
           RELEASE_TAG: ${{ steps.metadata.outputs.release_tag }}
           IMMUTABLE_TAG: ${{ steps.metadata.outputs.immutable_tag }}
+          EXPECTED_INDEX: ${{ steps.metadata.outputs.registry_digest }}
+          EXPECTED_PLATFORM: ${{ steps.metadata.outputs.registry_platform_digest }}
+          EXPECTED_ATTESTATION: ${{ steps.metadata.outputs.registry_attestation_digest }}
         run: |
           set -euo pipefail
-          docker tag "$TARGET_IMAGE:$CHANNEL_TAG" "$TARGET_IMAGE:$RELEASE_TAG"
-          docker tag "$TARGET_IMAGE:$CHANNEL_TAG" "$TARGET_IMAGE:$IMMUTABLE_TAG"
-          docker push "$TARGET_IMAGE:$CHANNEL_TAG"
-          docker push "$TARGET_IMAGE:$RELEASE_TAG"
-          docker push "$TARGET_IMAGE:$IMMUTABLE_TAG"
-          digest_ref=$(docker image inspect --format '{{index .RepoDigests 0}}' "$TARGET_IMAGE:$CHANNEL_TAG")
-          [[ $digest_ref =~ @sha256:[0-9a-f]{64}$ ]]
-          printf 'digest_ref=%s\n' "$digest_ref" >> "$GITHUB_OUTPUT"
+          python3 - <<'PY'
+          import json
+          import os
+          import subprocess
 
-      - name: Request public package visibility
-        continue-on-error: true
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: gh api --method PATCH /user/packages/container/redroid-mesa26 -f visibility=public
+          registry = os.environ["REGISTRY"]
+          expected_index = os.environ["EXPECTED_INDEX"]
+          expected_platform = os.environ["EXPECTED_PLATFORM"]
+          expected_attestation = os.environ["EXPECTED_ATTESTATION"]
+          tags = (
+              os.environ["CHANNEL_TAG"],
+              os.environ["RELEASE_TAG"],
+              os.environ["IMMUTABLE_TAG"],
+          )
+          for tag in tags:
+              reference = f"{registry}:{tag}"
+              result = subprocess.run(
+                  [
+                      "docker", "buildx", "imagetools", "inspect", reference,
+                      "--format", "{{json .Manifest}}",
+                  ],
+                  check=True,
+                  capture_output=True,
+                  text=True,
+              )
+              manifest = json.loads(result.stdout)
+              if manifest.get("digest") != expected_index:
+                  raise SystemExit(f"{reference}: OCI index digest mismatch")
+              children = manifest.get("manifests")
+              if not isinstance(children, list):
+                  raise SystemExit(f"{reference}: missing child manifests")
+              platforms = [
+                  child for child in children
+                  if child.get("platform") == {"architecture": "amd64", "os": "linux"}
+              ]
+              attestations = [
+                  child for child in children
+                  if child.get("annotations", {}).get("vnd.docker.reference.type")
+                  == "attestation-manifest"
+              ]
+              if len(platforms) != 1 or platforms[0].get("digest") != expected_platform:
+                  raise SystemExit(f"{reference}: Linux/amd64 manifest mismatch")
+              if len(attestations) != 1 or attestations[0].get("digest") != expected_attestation:
+                  raise SystemExit(f"{reference}: attestation manifest mismatch")
+              if (
+                  attestations[0].get("annotations", {}).get("vnd.docker.reference.digest")
+                  != expected_platform
+              ):
+                  raise SystemExit(f"{reference}: attestation subject mismatch")
+              print(f"verified {reference}@{expected_index}")
+          PY
 
-      - name: Report published image
+      - name: Report verified image
         env:
-          DIGEST_REF: ${{ steps.push.outputs.digest_ref }}
+          REGISTRY: ${{ steps.metadata.outputs.registry }}
+          EXPECTED_INDEX: ${{ steps.metadata.outputs.registry_digest }}
         run: |
           {
-            echo '## Published ReDroid image'
+            echo '## Verified ReDroid image'
             echo
             echo '```text'
-            echo "$DIGEST_REF"
+            echo "$REGISTRY@$EXPECTED_INDEX"
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
-
-      - name: Log out of GHCR
-        if: always()
-        run: docker logout ghcr.io
