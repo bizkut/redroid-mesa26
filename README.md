@@ -31,6 +31,8 @@ Available tags:
 - `v1.1.0`: release tag for this qualified image
 - `image-e12923c227c0`: immutable tag derived from the qualified local image ID
 
+The public OCI index digest is `sha256:e83683ca2de04553e7de57b757e6aebed2348fd7c8edcafab65c62f12f896ba7`; its Linux/amd64 image manifest is `sha256:d33e0b8bd00749fa4b134e748c7172cf9ac1e4caff3d131746f55ab1f76cec26`.
+
 The registry image adds OCI provenance labels to the qualified filesystem without changing its files. `prebuilt-image.json` binds the source image ID, rootfs SHA-256, platform, publication tags, and qualification boundary. The image contains no emulator `/data` state, APKs, game data, or account data.
 
 ## Pinned sources

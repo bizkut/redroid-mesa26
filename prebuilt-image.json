@@ -8,6 +8,8 @@
   "release_tag": "v1.1.0",
   "channel_tag": "android14-mesa26",
   "immutable_tag": "image-e12923c227c0",
-  "registry_digest": null,
+  "registry_digest": "sha256:e83683ca2de04553e7de57b757e6aebed2348fd7c8edcafab65c62f12f896ba7",
+  "registry_platform_digest": "sha256:d33e0b8bd00749fa4b134e748c7172cf9ac1e4caff3d131746f55ab1f76cec26",
+  "registry_attestation_digest": "sha256:2f85a77cccfd1b984ebf35db8fa88e6718fb800ad944ec1abe2bda3b646653ea",
   "qualification_boundary": "Android 14 boot, RadeonSI GLES draw/readback, RADV Vulkan fill/readback, and one ARM64 application launch on AMD Oberon/GFX1013; not Vulkan conformance or general application compatibility"
 }
