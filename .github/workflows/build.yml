@@ -28,7 +28,7 @@ jobs:
     timeout-minutes: 15
     steps:
       - name: Check out recipe
-        uses: actions/checkout@v4
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
 
@@ -99,7 +99,7 @@ jobs:
       REDROID_CCACHE_DIR: ${{ vars.REDROID_CCACHE_DIR }}
     steps:
       - name: Check out trusted default branch
-        uses: actions/checkout@v4
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
 
@@ -193,7 +193,7 @@ jobs:
 
       - name: Upload logs and provenance
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: redroid-mesa26-${{ github.run_id }}
           if-no-files-found: warn
