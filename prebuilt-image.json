@@ -1,0 +1,13 @@
+{
+  "schema": 1,
+  "qualified_source_image": "redroid-rootfs:android14-mesa26",
+  "qualified_source_image_id": "sha256:e12923c227c098504ed69e84e04a3dfee57d2566fac97e3b54d5b6c1916d5fb2",
+  "qualified_rootfs_sha256": "7ad0758dd12c76c64e0334e32f2e12b1f745842f0f32bd7d19e614383a49d750",
+  "platform": "linux/amd64",
+  "registry": "ghcr.io/bizkut/redroid-mesa26",
+  "release_tag": "v1.1.0",
+  "channel_tag": "android14-mesa26",
+  "immutable_tag": "image-e12923c227c0",
+  "registry_digest": null,
+  "qualification_boundary": "Android 14 boot, RadeonSI GLES draw/readback, RADV Vulkan fill/readback, and one ARM64 application launch on AMD Oberon/GFX1013; not Vulkan conformance or general application compatibility"
+}

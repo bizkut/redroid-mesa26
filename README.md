@@ -17,6 +17,22 @@ The current recipe has produced `redroid-rootfs:android14-mesa26` and passed a b
 
 This is build and bounded operation evidence. It is **not** Vulkan conformance, general application compatibility, physical ARM64 qualification, or a security boundary.
 
+## Prebuilt Docker image
+
+The qualified Linux/amd64 image is published through GitHub Container Registry:
+
+```sh
+docker pull ghcr.io/bizkut/redroid-mesa26:android14-mesa26
+```
+
+Available tags:
+
+- `android14-mesa26`: maintained Android 14/Mesa 26 channel
+- `v1.1.0`: release tag for this qualified image
+- `image-e12923c227c0`: immutable tag derived from the qualified local image ID
+
+The registry image adds OCI provenance labels to the qualified filesystem without changing its files. `prebuilt-image.json` binds the source image ID, rootfs SHA-256, platform, publication tags, and qualification boundary. The image contains no emulator `/data` state, APKs, game data, or account data.
+
 ## Pinned sources
 
 | Component | Revision |
@@ -97,15 +113,26 @@ Optional repository variables:
 | `REDROID_DOCKER_MEM` | `12g` |
 | `REDROID_DOCKER_SWAP` | `36g` |
 
-The workflow derives a source-cache directory from the manifests and patch content. Changed source recipes use a new checkout instead of deleting an older one. Successful runs retain the complete Docker image and rootfs archive on the dedicated runner and upload only the build log and provenance JSON to GitHub. Images are not automatically published.
+The build workflow derives a source-cache directory from the manifests and patch content. Changed source recipes use a new checkout instead of deleting an older one. Successful runs retain the complete Docker image and rootfs archive on the dedicated runner and upload only the build log and provenance JSON to GitHub.
+
+The separate owner-only `Publish qualified ReDroid image` workflow runs on a trusted self-hosted runner labeled `redroid-publisher`. It refuses any local image whose ID or platform differs from `prebuilt-image.json`, adds OCI provenance labels, and pushes the channel, release, and immutable tags with the repository-scoped `GITHUB_TOKEN`.
 
 ## Run the image
 
-The supplied Compose file is intentionally privileged and exposes ADB on loopback only:
+The supplied Compose file pulls the GHCR channel when missing, remains intentionally privileged, and exposes ADB on loopback only:
 
 ```sh
+docker compose pull
 docker compose up -d
 adb connect 127.0.0.1:5558
+```
+
+To run a locally built image instead:
+
+```sh
+REDROID_MESA26_IMAGE=redroid-rootfs:android14-mesa26 \
+REDROID_MESA26_PULL_POLICY=never \
+docker compose up -d
 ```
 
 Stop it without deleting its independent data directory:

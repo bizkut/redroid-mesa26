@@ -1,8 +1,8 @@
 name: redroid-mesa26
 services:
   android:
-    image: ${REDROID_MESA26_IMAGE:-redroid-rootfs:android14-mesa26}
-    pull_policy: never
+    image: ${REDROID_MESA26_IMAGE:-ghcr.io/bizkut/redroid-mesa26:android14-mesa26}
+    pull_policy: ${REDROID_MESA26_PULL_POLICY:-missing}
     container_name: redroid-mesa26
     privileged: true
     restart: "no"

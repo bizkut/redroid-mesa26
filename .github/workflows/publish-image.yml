@@ -1,0 +1,140 @@
+name: Publish qualified ReDroid image
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  publish:
+    name: Publish qualified image to GHCR
+    if: >-
+      github.ref == 'refs/heads/main' &&
+      github.actor == github.repository_owner
+    runs-on: [self-hosted, Linux, X64, redroid-publisher]
+    timeout-minutes: 120
+    concurrency:
+      group: redroid-mesa26-publish
+      cancel-in-progress: false
+    steps:
+      - name: Check out trusted publication manifest
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Resolve and validate publication metadata
+        id: metadata
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json
+          import os
+          import re
+          from pathlib import Path
+
+          data = json.loads(Path("prebuilt-image.json").read_text())
+          expected = {
+              "qualified_source_image": r"[a-z0-9._/-]+:[a-z0-9._-]+",
+              "qualified_source_image_id": r"sha256:[0-9a-f]{64}",
+              "qualified_rootfs_sha256": r"[0-9a-f]{64}",
+              "registry": r"ghcr\.io/[a-z0-9._/-]+",
+              "release_tag": r"v[0-9]+\.[0-9]+\.[0-9]+",
+              "channel_tag": r"[a-z0-9._-]+",
+              "immutable_tag": r"image-[0-9a-f]{12}",
+          }
+          if data.get("schema") != 1 or data.get("platform") != "linux/amd64":
+              raise SystemExit("unsupported prebuilt image manifest")
+          for key, pattern in expected.items():
+              value = data.get(key)
+              if not isinstance(value, str) or re.fullmatch(pattern, value) is None:
+                  raise SystemExit(f"invalid {key}")
+          if data["registry"] != "ghcr.io/bizkut/redroid-mesa26":
+              raise SystemExit("unexpected publication registry")
+          with Path(os.environ["GITHUB_OUTPUT"]).open("a") as output:
+              for key in expected:
+                  print(f"{key}={data[key]}", file=output)
+          PY
+
+      - name: Verify exact qualified local image
+        env:
+          SOURCE_IMAGE: ${{ steps.metadata.outputs.qualified_source_image }}
+          EXPECTED_ID: ${{ steps.metadata.outputs.qualified_source_image_id }}
+        run: |
+          set -euo pipefail
+          observed=$(docker image inspect --format '{{.Id}}' "$SOURCE_IMAGE")
+          [[ $observed == "$EXPECTED_ID" ]] || {
+            echo "Expected $EXPECTED_ID but found $observed" >&2
+            exit 1
+          }
+          [[ $(docker image inspect --format '{{.Os}}/{{.Architecture}}' "$SOURCE_IMAGE") == linux/amd64 ]]
+
+      - name: Create labeled registry image
+        env:
+          SOURCE_IMAGE: ${{ steps.metadata.outputs.qualified_source_image }}
+          TARGET_IMAGE: ${{ steps.metadata.outputs.registry }}
+          CHANNEL_TAG: ${{ steps.metadata.outputs.channel_tag }}
+          ROOTFS_SHA256: ${{ steps.metadata.outputs.qualified_rootfs_sha256 }}
+        run: |
+          set -euo pipefail
+          context="$RUNNER_TEMP/redroid-publish-context"
+          rm -rf "$context"
+          mkdir -p "$context"
+          printf '%s\n' 'ARG SOURCE_IMAGE' "FROM \${SOURCE_IMAGE}" > "$context/Dockerfile"
+          docker build --pull=false \
+            --build-arg SOURCE_IMAGE="$SOURCE_IMAGE" \
+            --label org.opencontainers.image.title='ReDroid Android 14 with Mesa 26' \
+            --label org.opencontainers.image.description='Hardware-accelerated Android 14 ReDroid image with Mesa RadeonSI and RADV' \
+            --label org.opencontainers.image.source="https://github.com/$GITHUB_REPOSITORY" \
+            --label org.opencontainers.image.revision="$GITHUB_SHA" \
+            --label org.opencontainers.image.version="${{ steps.metadata.outputs.release_tag }}" \
+            --label io.github.bizkut.redroid.qualified-source-id="${{ steps.metadata.outputs.qualified_source_image_id }}" \
+            --label io.github.bizkut.redroid.rootfs-sha256="$ROOTFS_SHA256" \
+            --tag "$TARGET_IMAGE:$CHANNEL_TAG" \
+            "$context"
+
+      - name: Authenticate to GitHub Container Registry
+        env:
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: printf '%s' "$GHCR_TOKEN" | docker login ghcr.io --username "$GITHUB_ACTOR" --password-stdin
+
+      - name: Push versioned and immutable tags
+        id: push
+        env:
+          TARGET_IMAGE: ${{ steps.metadata.outputs.registry }}
+          CHANNEL_TAG: ${{ steps.metadata.outputs.channel_tag }}
+          RELEASE_TAG: ${{ steps.metadata.outputs.release_tag }}
+          IMMUTABLE_TAG: ${{ steps.metadata.outputs.immutable_tag }}
+        run: |
+          set -euo pipefail
+          docker tag "$TARGET_IMAGE:$CHANNEL_TAG" "$TARGET_IMAGE:$RELEASE_TAG"
+          docker tag "$TARGET_IMAGE:$CHANNEL_TAG" "$TARGET_IMAGE:$IMMUTABLE_TAG"
+          docker push "$TARGET_IMAGE:$CHANNEL_TAG"
+          docker push "$TARGET_IMAGE:$RELEASE_TAG"
+          docker push "$TARGET_IMAGE:$IMMUTABLE_TAG"
+          digest_ref=$(docker image inspect --format '{{index .RepoDigests 0}}' "$TARGET_IMAGE:$CHANNEL_TAG")
+          [[ $digest_ref =~ @sha256:[0-9a-f]{64}$ ]]
+          printf 'digest_ref=%s\n' "$digest_ref" >> "$GITHUB_OUTPUT"
+
+      - name: Request public package visibility
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh api --method PATCH /user/packages/container/redroid-mesa26 -f visibility=public
+
+      - name: Report published image
+        env:
+          DIGEST_REF: ${{ steps.push.outputs.digest_ref }}
+        run: |
+          {
+            echo '## Published ReDroid image'
+            echo
+            echo '```text'
+            echo "$DIGEST_REF"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Log out of GHCR
+        if: always()
+        run: docker logout ghcr.io
